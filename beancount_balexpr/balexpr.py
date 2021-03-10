@@ -85,6 +85,6 @@ def balexpr(entries, options_map):
                 continue
             delta = result - entry.values[1].value.number
             if abs(delta) > 0.005:
-                errors.append(BalExprError(entry.meta, "Balance failed for '%s': expected %.2f != accumulated %.2f CNY (%.2f too much)" % (entry.values[0].value, entry.values[1].value.number, result, delta), entry))
+                errors.append(BalExprError(entry.meta, "Balance failed for '%s': expected %.2f != accumulated %.2f (%.2f too much)" % (entry.values[0].value, entry.values[1].value.number, result, delta), entry))
 
     return entries, errors
