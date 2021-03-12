@@ -1,4 +1,5 @@
 import collections
+from copy import copy
 from decimal import Decimal
 from beancount.core.data import Custom
 from beancount.query import query
@@ -44,7 +45,9 @@ def calcuate(entry, entries, options_map):
                 amount = balances[account]
             else:
                 try:
+                    ccontexts = copy(options_map['dcontext'].ccontexts)
                     amount = query.run_query(entries, options_map, "SELECT last(balance) FROM CLOSE ON %s WHERE account='%s'" % (entry.date, account), numberify=True)[1][0][0]
+                    options_map['dcontext'].ccontexts = ccontexts
                 except:
                     return None, BalExprError(entry.meta, 'account "%s" invalid in balance expression "%s"' % (account, expr), entry)
                 balances[account] = amount
