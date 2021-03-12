@@ -1,7 +1,7 @@
 import collections
 from copy import copy
 from decimal import Decimal
-from beancount.core.data import Custom
+from beancount.core.data import Custom, Open
 from beancount.query import query
 
 __plugins__ = ['balexpr']
@@ -28,7 +28,7 @@ def push_stack(stack, num):
             return
     stack.append(num)
 
-def calcuate(entry, entries, options_map):
+def calcuate(entry, entries, options_map, accounts):
     expr = entry.values[0].value
     stack = []
     paren = []
@@ -44,11 +44,14 @@ def calcuate(entry, entries, options_map):
             if account in balances:
                 amount = balances[account]
             else:
-                try:
+                if account in accounts:
                     ccontexts = copy(options_map['dcontext'].ccontexts)
-                    amount = query.run_query(entries, options_map, "SELECT last(balance) FROM CLOSE ON %s WHERE account='%s'" % (entry.date, account), numberify=True)[1][0][0]
+                    try:
+                        amount = query.run_query(entries, options_map, "SELECT last(balance) FROM CLOSE ON %s WHERE account='%s'" % (entry.date, account), numberify=True)[1][0][0]
+                    except:
+                        amount = 0
                     options_map['dcontext'].ccontexts = ccontexts
-                except:
+                else:
                     return None, BalExprError(entry.meta, 'account "%s" invalid in balance expression "%s"' % (account, expr), entry)
                 balances[account] = amount
             push_stack(stack, amount)
@@ -80,9 +83,12 @@ def calcuate(entry, entries, options_map):
 
 def balexpr(entries, options_map):
     errors = []
+    accounts = []
     for entry in entries:
+        if type(entry) is Open:
+            accounts.append(entry.account)
         if type(entry) is Custom and entry.type == 'balexpr':
-            result, error = calcuate(entry, entries, options_map)
+            result, error = calcuate(entry, entries, options_map, accounts)
             if error:
                 errors.append(error)
                 continue

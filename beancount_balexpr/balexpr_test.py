@@ -29,6 +29,17 @@ class TestBalExpr(cmptest.TestCase):
         """
         entries, _ = balexpr(entries, options_map)
 
+    @loader.load_doc()
+    def test_zero_account(self, entries, _, options_map):
+        """
+          plugin "beancount_balexpr.balexpr"
+          1990-01-01 open Assets:A
+          1990-01-01 open Equity:OpenBalance
+          1991-01-02 balance Assets:A 0.00 USD
+          1991-01-03 custom "balexpr" "Assets:A" 0.00 USD
+        """
+        entries, _ = balexpr(entries, options_map)
+
     @loader.load_doc(expect_errors=True)
     def test_bad_expr(self, entries, _, options_map):
         """
