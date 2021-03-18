@@ -6,10 +6,9 @@ import re
 
 from copy import copy
 from decimal import Decimal
-from beancount.core.data import Custom, Open, Transaction
+from beancount.core.data import Custom, Transaction
 from beancount.core.amount import Amount, add, sub, mul, div
 from beancount.core import account, getters, realization
-from beancount.query import query
 
 __plugins__ = ['balexpr']
 
@@ -84,14 +83,14 @@ def calcuate(expr, currency, real_root):
         return None, 'Unclosed paren detected'
     return compute_stack(stack), None
 
+def is_balexpr_entry(entry):
+    return isinstance(entry, Custom) and entry.type == 'balexpr'
+
 def get_expression_from_entry(entry):
     return entry.values[0].value
 
 def get_expected_amount_from_entry(entry):
     return entry.values[1].value
-
-def is_balexpr_entry(entry):
-    return isinstance(entry, Custom) and entry.type == 'balexpr'
 
 def get_accounts_from_entry(entry):
     return map(
