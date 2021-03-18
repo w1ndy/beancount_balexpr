@@ -1,35 +1,46 @@
+# BalExpr: Check balances against simple expressions combining multiple accounts in beancount.
+# Parts of the code adapted from the beancount project (https://github.com/beancount/beancount)
+
 import collections
+import re
+
 from copy import copy
 from decimal import Decimal
-from beancount.core.data import Custom, Open
+from beancount.core.data import Custom, Open, Transaction
+from beancount.core.amount import Amount, add, sub, mul, div
+from beancount.core import account, getters, realization
 from beancount.query import query
 
 __plugins__ = ['balexpr']
 
 BalExprError = collections.namedtuple('BalExprError', 'source message entry')
 
-def plusminus(stack):
+def compute_stack(stack):
     for i in range(1, len(stack), 2):
         if stack[i] == '+':
-            stack[0] += stack[i + 1]
+            stack[0] = add(stack[0], stack[i + 1])
         elif stack[i] == '-':
-            stack[0] -= stack[i + 1]
+            stack[0] = sub(stack[0], stack[i + 1])
     return stack[0]
 
-def push_stack(stack, num):
-    if len(stack) > 0:
-        if stack[-1] == '*':
-            stack[-2] = stack[-2] * num
-            stack = stack[:-1]
-            return
-        elif stack[-1] == '/':
-            stack[-2] = stack[-2] / num
-            stack = stack[:-1]
-            return
-    stack.append(num)
+def push_amount_into_stack(stack, amount):
+    if not stack:
+        stack.append(amount)
+    elif stack[-1] == '*':
+        stack[-2] = mul(stack[-2], amount.number)
+        stack.pop()
+    elif stack[-1] == '/':
+        stack[-2] = div(stack[-2], amount.number)
+        stack.pop()
+    else:
+        stack.append(amount)
 
-def calcuate(entry, entries, options_map, accounts):
-    expr = entry.values[0].value
+def get_balance(account, currency, real_root):
+    real_account = realization.get(real_root, account)
+    subtree_balance = realization.compute_balance(real_account, leaf_only=False)
+    return subtree_balance.get_currency_units(currency)
+
+def calcuate(expr, currency, real_root):
     stack = []
     paren = []
     balances = {}
@@ -44,22 +55,14 @@ def calcuate(entry, entries, options_map, accounts):
             if account in balances:
                 amount = balances[account]
             else:
-                if account in accounts:
-                    ccontexts = copy(options_map['dcontext'].ccontexts)
-                    try:
-                        amount = query.run_query(entries, options_map, "SELECT last(balance) FROM CLOSE ON %s WHERE account='%s'" % (entry.date, account), numberify=True)[1][0][0]
-                    except:
-                        amount = 0
-                    options_map['dcontext'].ccontexts = ccontexts
-                else:
-                    return None, BalExprError(entry.meta, 'account "%s" invalid in balance expression "%s"' % (account, expr), entry)
+                amount = get_balance(account, currency, real_root)
                 balances[account] = amount
-            push_stack(stack, amount)
+            push_amount_into_stack(stack, amount)
         elif str.isnumeric(ch):
             start = pos
             while pos < len(expr) and (str.isnumeric(expr[pos]) or expr[pos] == '.'):
                 pos += 1
-            push_stack(stack, Decimal(expr[start:pos]))
+            push_amount_into_stack(stack, Amount(Decimal(expr[start:pos]), currency))
         elif ch in ['+', '-', '*', '/']:
             stack.append(ch)
             pos += 1
@@ -68,32 +71,115 @@ def calcuate(entry, entries, options_map, accounts):
             stack.append(ch)
             pos += 1
         elif ch == ')':
-            result = plusminus(stack[paren[-1] + 1:])
+            result = compute_stack(stack[paren[-1] + 1:])
             stack = stack[:paren[-1]]
-            push_stack(stack, result)
-            paren = paren[:-1]
+            push_amount_into_stack(stack, result)
+            paren.pop()
             pos += 1
         elif ch in [' ', '\t']:
             pos += 1
         else:
-            return None, BalExprError(entry.meta, 'unknown char "%s" in balance expression "%s"' % (ch, expr), entry)
+            return None, 'Unknown char \'{}\''.format(ch)
     if paren:
-        return None, BalExprError(entry.meta, 'paren is not closed in balance expression "%s"' % expr, entry)
-    return plusminus(stack), None
+        return None, 'Unclosed paren detected'
+    return compute_stack(stack), None
+
+def get_expression_from_entry(entry):
+    return entry.values[0].value
+
+def get_expected_amount_from_entry(entry):
+    return entry.values[1].value
+
+def is_balexpr_entry(entry):
+    return isinstance(entry, Custom) and entry.type == 'balexpr'
+
+def get_accounts_from_entry(entry):
+    return map(
+        lambda m: m[0],
+        re.findall(
+            '((Assets|Liabilities|Expenses|Equity)(:\w+)+)',
+            get_expression_from_entry(entry)))
 
 def balexpr(entries, options_map):
     errors = []
     accounts = []
+
+    real_root = realization.RealAccount('')
+
+    asserted_accounts = {
+        account_
+        for entry in entries
+        if is_balexpr_entry(entry)
+        for account_ in get_accounts_from_entry(entry)}
+
+    asserted_match_list = [
+        account.parent_matcher(account_)
+        for account_ in asserted_accounts]
+    for account_ in getters.get_accounts(entries):
+        if (account_ in asserted_accounts or
+            any(match(account_) for match in asserted_match_list)):
+            realization.get_or_create(real_root, account_)
+
+    open_close_map = getters.get_account_open_close(entries)
+
     for entry in entries:
-        if type(entry) is Open:
-            accounts.append(entry.account)
-        if type(entry) is Custom and entry.type == 'balexpr':
-            result, error = calcuate(entry, entries, options_map, accounts)
-            if error:
-                errors.append(error)
+        if isinstance(entry, Transaction):
+            for posting in entry.postings:
+                real_account = realization.get(real_root, posting.account)
+                if real_account is not None:
+                    real_account.balance.add_position(posting)
+        elif is_balexpr_entry(entry):
+            accounts = get_accounts_from_entry(entry)
+            if not accounts:
+                errors.append(BalExprError(
+                    entry.meta,
+                    'No account found in the expression',
+                    entry))
                 continue
-            delta = result - entry.values[1].value.number
-            if abs(delta) > 0.005:
-                errors.append(BalExprError(entry.meta, "Balance failed for '%s': expected %.2f != accumulated %.2f (%.2f too much)" % (entry.values[0].value, entry.values[1].value.number, result, delta), entry))
+
+            currency = get_expected_amount_from_entry(entry).currency
+            error_found_in_currencies = False
+            for account_ in accounts:
+                try:
+                    open, _ = open_close_map[account_]
+                except KeyError:
+                    errors.append(BalExprError(
+                        entry.meta,
+                        'Invalid reference to unknown account \'{}\''.format(account_),
+                        entry))
+                    error_found_in_currencies = True
+                    break
+
+                if currency not in open.currencies:
+                    errors.append(BalExprError(
+                        entry.meta,
+                        'Currencies are inconsistent',
+                        entry))
+                    error_found_in_currencies = True
+                    break
+
+            if error_found_in_currencies:
+                continue
+
+            expression = get_expression_from_entry(entry)
+            expected_amount = get_expected_amount_from_entry(entry)
+
+            real_amount, error_msg = calcuate(expression, currency, real_root)
+            if error_msg:
+                errors.append(BalExprError(entry.meta, error_msg, entry))
+                continue
+
+            diff_amount = sub(real_amount, expected_amount)
+            if abs(diff_amount.number) > 0.005:
+                errors.append(BalExprError(
+                    entry.meta,
+                    "BalExpr failed: expected {} != accumulated {} ({} {})".format(
+                        expected_amount,
+                        real_amount,
+                        abs(diff_amount.number),
+                        ('too much'
+                         if diff_amount.number > 0
+                         else 'too little')),
+                    entry))
 
     return entries, errors

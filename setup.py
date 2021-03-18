@@ -7,7 +7,7 @@ setup(
     name = 'beancount_balexpr',
     packages = find_packages(),
     python_requires = '>=3.3',
-    version = '0.1.7',
+    version = '0.2.0',
     license = 'MIT',
     description = 'Check balances against simple expressions combining multiple accounts in beancount',
     long_description = long_description,

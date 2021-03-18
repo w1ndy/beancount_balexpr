@@ -10,14 +10,13 @@ class TestBalExpr(cmptest.TestCase):
     def test_good_expr(self, entries, _, options_map):
         """
           plugin "beancount_balexpr.balexpr"
-          1990-01-01 open Assets:A
-          1990-01-01 open Assets:B
-          1990-01-01 open Equity:OpenBalance
+          1990-01-01 open Assets:A USD
+          1990-01-01 open Assets:B USD
+          1990-01-01 open Equity:OpenBalance USD
           1991-01-01 pad Assets:A Equity:OpenBalance
           1991-01-01 pad Assets:B Equity:OpenBalance
           1991-01-02 balance Assets:A 213.00 USD
           1991-01-02 balance Assets:B 264.00 USD
-          1991-01-03 custom "balexpr" "200.00+300.00" 500.00 USD
           1991-01-03 custom "balexpr" "Assets:A+Assets:B" 477.00 USD
           1991-01-03 custom "balexpr" "Assets:A+200.00" 413.00 USD
           1991-01-03 custom "balexpr" "Assets:B*(Assets:A+200.00)" 109032.00 USD
@@ -33,7 +32,7 @@ class TestBalExpr(cmptest.TestCase):
     def test_zero_account(self, entries, _, options_map):
         """
           plugin "beancount_balexpr.balexpr"
-          1990-01-01 open Assets:A
+          1990-01-01 open Assets:A USD
           1990-01-01 open Equity:OpenBalance
           1991-01-02 balance Assets:A 0.00 USD
           1991-01-03 custom "balexpr" "Assets:A" 0.00 USD
@@ -44,8 +43,8 @@ class TestBalExpr(cmptest.TestCase):
     def test_bad_expr(self, entries, _, options_map):
         """
           plugin "beancount_balexpr.balexpr"
-          1990-01-01 open Assets:A
-          1990-01-01 open Assets:B
+          1990-01-01 open Assets:A USD
+          1990-01-01 open Assets:B USD
           1990-01-01 open Equity:OpenBalance
           1991-01-01 pad Assets:A Equity:OpenBalance
           1991-01-01 pad Assets:B Equity:OpenBalance
@@ -55,9 +54,10 @@ class TestBalExpr(cmptest.TestCase):
           1991-01-03 custom "balexpr" "Assets:A^Assets:B" 400.00 USD
           1991-01-03 custom "balexpr" "(Assets:A+Assets:B" 400.00 USD
           1991-01-03 custom "balexpr" "Assets:C+200" 400.00 USD
+          1991-01-03 custom "balexpr" "(Assets:A+Assets:A)*Assets:B" 112464.00 CNY
         """
         entries, errors = balexpr(entries, options_map)
-        self.assertEqual(len(errors), 4)
+        self.assertEqual(len(errors), 5)
 
 if __name__ == '__main__':
     unittest.main()
