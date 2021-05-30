@@ -105,10 +105,14 @@ def balexpr(entries, options_map):
 
     real_root = realization.RealAccount('')
 
+    balexpr_entries = [
+        entry
+        for entry in entries
+        if is_balexpr_entry(entry)]
+
     asserted_accounts = {
         account_
-        for entry in entries
-        if is_balexpr_entry(entry)
+        for entry in balexpr_entries
         for account_ in get_accounts_from_entry(entry)}
 
     asserted_match_list = [
@@ -121,57 +125,60 @@ def balexpr(entries, options_map):
 
     open_close_map = getters.get_account_open_close(entries)
 
+    current_checking_balexpr_entry = 0
+
     for entry in entries:
-        if isinstance(entry, Transaction):
-            for posting in entry.postings:
-                real_account = realization.get(real_root, posting.account)
-                if real_account is not None:
-                    real_account.balance.add_position(posting)
-        elif is_balexpr_entry(entry):
-            accounts = get_accounts_from_entry(entry)
+        if current_checking_balexpr_entry >= len(balexpr_entries):
+            break
+
+        while current_checking_balexpr_entry < len(balexpr_entries) and balexpr_entries[current_checking_balexpr_entry].date == entry.date:
+            checking_entry = balexpr_entries[current_checking_balexpr_entry]
+            current_checking_balexpr_entry += 1
+
+            accounts = get_accounts_from_entry(checking_entry)
             if not accounts:
                 errors.append(BalExprError(
-                    entry.meta,
+                    checking_entry.meta,
                     'No account found in the expression',
-                    entry))
+                    checking_entry))
                 continue
 
-            currency = get_expected_amount_from_entry(entry).currency
+            currency = get_expected_amount_from_entry(checking_entry).currency
             error_found_in_currencies = False
             for account_ in accounts:
                 try:
                     open, _ = open_close_map[account_]
                 except KeyError:
                     errors.append(BalExprError(
-                        entry.meta,
+                        checking_entry.meta,
                         'Invalid reference to unknown account \'{}\''.format(account_),
-                        entry))
+                        checking_entry))
                     error_found_in_currencies = True
                     break
 
                 if currency not in open.currencies:
                     errors.append(BalExprError(
-                        entry.meta,
+                        checking_entry.meta,
                         'Currencies are inconsistent',
-                        entry))
+                        checking_entry))
                     error_found_in_currencies = True
                     break
 
             if error_found_in_currencies:
                 continue
 
-            expression = get_expression_from_entry(entry)
-            expected_amount = get_expected_amount_from_entry(entry)
+            expression = get_expression_from_entry(checking_entry)
+            expected_amount = get_expected_amount_from_entry(checking_entry)
 
             real_amount, error_msg = calcuate(expression, currency, real_root)
             if error_msg:
-                errors.append(BalExprError(entry.meta, error_msg, entry))
+                errors.append(BalExprError(checking_entry.meta, error_msg, checking_entry))
                 continue
 
             diff_amount = sub(real_amount, expected_amount)
             if abs(diff_amount.number) > 0.005:
                 errors.append(BalExprError(
-                    entry.meta,
+                    checking_entry.meta,
                     "BalExpr failed: expected {} != accumulated {} ({} {})".format(
                         expected_amount,
                         real_amount,
@@ -179,6 +186,12 @@ def balexpr(entries, options_map):
                         ('too much'
                          if diff_amount.number > 0
                          else 'too little')),
-                    entry))
+                    checking_entry))
+
+        if isinstance(entry, Transaction):
+            for posting in entry.postings:
+                real_account = realization.get(real_root, posting.account)
+                if real_account is not None:
+                    real_account.balance.add_position(posting)
 
     return entries, errors

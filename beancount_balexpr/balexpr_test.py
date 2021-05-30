@@ -12,11 +12,19 @@ class TestBalExpr(cmptest.TestCase):
           plugin "beancount_balexpr.balexpr"
           1990-01-01 open Assets:A USD
           1990-01-01 open Assets:B USD
+          1990-01-01 open Assets:C USD
           1990-01-01 open Equity:OpenBalance USD
           1991-01-01 pad Assets:A Equity:OpenBalance
           1991-01-01 pad Assets:B Equity:OpenBalance
+          1991-01-01 pad Assets:C Equity:OpenBalance
           1991-01-02 balance Assets:A 213.00 USD
           1991-01-02 balance Assets:B 264.00 USD
+          1991-01-02 balance Assets:C 20.00 USD
+
+          1991-01-03 * "This record should not have impact on balexpr"
+            Assets:B +20 USD
+            Assets:C
+
           1991-01-03 custom "balexpr" "Assets:A+Assets:B" 477.00 USD
           1991-01-03 custom "balexpr" "Assets:A+200.00" 413.00 USD
           1991-01-03 custom "balexpr" "Assets:B*(Assets:A+200.00)" 109032.00 USD
