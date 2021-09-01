@@ -75,7 +75,7 @@ def calcuate(expr, currency, real_root):
             push_amount_into_stack(stack, result)
             paren.pop()
             pos += 1
-        elif ch in [' ', '\t']:
+        elif ch in [' ', '\t', '\r', '\n']:
             pos += 1
         else:
             return None, 'Unknown char \'{}\''.format(ch)
