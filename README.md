@@ -28,6 +28,10 @@ plugin "beancount_balexpr.balexpr"
 1991-01-03 custom "balexpr" "Assets:A/Assets:B"                 0.81 USD
 1991-01-03 custom "balexpr" "Assets:A+Assets:A*Assets:B"    56445.00 USD
 1991-01-03 custom "balexpr" "(Assets:A+Assets:A)*Assets:B" 112464.00 USD
+
+1991-01-03 custom "balexpr" "
+    Assets:A +
+    Assets:B"               477.00 USD
 ```
 
 ## Limitations
