@@ -96,7 +96,7 @@ def get_accounts_from_entry(entry):
     return map(
         lambda m: m[0],
         re.findall(
-            '((Assets|Liabilities|Expenses|Equity)(:\w+)+)',
+            r'((Assets|Liabilities|Expenses|Equity)(:\w+)+)',
             get_expression_from_entry(entry)))
 
 def balexpr(entries, options_map):
