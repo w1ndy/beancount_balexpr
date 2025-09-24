@@ -9,7 +9,13 @@ class TestBalExpr(cmptest.TestCase):
     @loader.load_doc()
     def test_good_expr(self, entries, _, options_map):
         """
+          option "plugin_processing_mode" "raw"
+
+          plugin "beancount.ops.documents"
+          plugin "beancount.ops.pad"
           plugin "beancount_balexpr.balexpr"
+          plugin "beancount.ops.balance"
+
           1990-01-01 open Assets:A USD
           1990-01-01 open Assets:B USD
           1990-01-01 open Assets:C USD
