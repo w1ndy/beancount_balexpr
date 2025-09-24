@@ -1,4 +1,5 @@
 # beancount_balexpr
+
 Check balances against simple expressions combining multiple accounts in beancount.
 
 ## Installation
@@ -10,7 +11,12 @@ pip install beancount_balexpr
 ## Examples
 
 ```
-plugin "beancount_balexpr.balexpr"
+option "plugin_processing_mode" "raw"
+
+plugin "beancount.ops.documents"
+plugin "beancount.ops.pad"
+plugin "beancount_balexpr.balexpr" ; <- If padding entries are used, please make sure this plugin loads after beancount.ops.pad
+plugin "beancount.ops.balance"
 
 1990-01-01 open Assets:A USD
 1990-01-01 open Assets:B USD
@@ -36,4 +42,4 @@ plugin "beancount_balexpr.balexpr"
 
 ## Limitations
 
-* Does not support the account names with dashes because they are conflicting with the minus sign
+- Does not support the account names with dashes because they are conflicting with the minus sign
